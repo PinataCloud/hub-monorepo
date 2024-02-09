@@ -47,7 +47,7 @@ import SyncEngine from "../network/sync/syncEngine.js";
 import Engine from "../storage/engine/index.js";
 import { MessagesPage } from "../storage/stores/types.js";
 import { logger } from "../utils/logger.js";
-import { addressInfoFromParts, extractIPAddress } from "../utils/p2p.js";
+import { addressInfoFromParts, extractIPAddress, getPeerVisitorIp } from "../utils/p2p.js";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 import {
   BufferedStreamWriter,
@@ -58,6 +58,7 @@ import { sleep } from "../utils/crypto.js";
 import { SUBMIT_MESSAGE_RATE_LIMIT, rateLimitByIp } from "../utils/rateLimits.js";
 import { statsd } from "../utils/statsd.js";
 import { SyncId } from "../network/sync/syncId.js";
+import { BlockList } from "net";
 
 const HUBEVENTS_READER_TIMEOUT = 1 * 60 * 60 * 1000; // 1 hour
 
@@ -239,6 +240,7 @@ export default class Server {
   private rpcUsers: RpcUsers;
   private submitMessageRateLimiter: RateLimiterMemory;
   private subscribeIpLimiter: IpConnectionLimiter;
+  private proxyTrustedIpRange: BlockList | undefined;
 
   constructor(
     hub?: HubInterface,
@@ -248,6 +250,7 @@ export default class Server {
     rpcAuth?: string,
     rpcRateLimit?: number,
     rpcSubscribePerIpLimit?: number,
+    proxyTrustIpRange?: string[],
   ) {
     this.hub = hub;
     this.engine = engine;
@@ -280,6 +283,12 @@ export default class Server {
       rpcSubscribePerIpLimit ?? DEFAULT_SUBSCRIBE_PERIP_LIMIT,
       DEFAULT_SUBSCRIBE_GLOBAL_LIMIT,
     );
+
+    if (proxyTrustIpRange?.[0] && proxyTrustIpRange[1]) {
+      this.proxyTrustedIpRange = new BlockList();
+      this.proxyTrustedIpRange.addRange(proxyTrustIpRange[0], proxyTrustIpRange[1]);
+      log.info({ proxyTrustedIpRange: proxyTrustIpRange }, "Proxy trusted ip range enabled");
+    }
   }
 
   async start(ip = "0.0.0.0", port = 0): Promise<number> {
@@ -546,7 +555,7 @@ export default class Server {
       submitMessage: async (call, callback) => {
         // Identify peer that is calling, if available. This is used for rate limiting.
         const peer = Result.fromThrowable(
-          () => call.getPeer(),
+          () => getPeerVisitorIp(call, this.proxyTrustedIpRange),
           (e) => e,
         )().unwrapOr("unavailable");
 

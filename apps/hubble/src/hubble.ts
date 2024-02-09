@@ -83,6 +83,7 @@ import { exportToProtobuf } from "@libp2p/peer-id-factory";
 import OnChainEventStore from "./storage/stores/onChainEventStore.js";
 import { ensureMessageData, isMessageInDB } from "./storage/db/message.js";
 import { getFarcasterTime } from "@farcaster/core";
+import { BlockList } from "net";
 
 export type HubSubmitSource = "gossip" | "rpc" | "eth-provider" | "l2-provider" | "sync" | "fname-registry";
 
@@ -288,6 +289,9 @@ export interface HubOptions {
 
   /** Should we connect to DB peers on startup */
   connectToDbPeers?: boolean;
+
+  /** If set, use x-forwarded-for header for rate limit */
+  proxyTrustIpRange?: string[] | undefined;
 }
 
 /** @returns A randomized string of the format `rocksdb.tmp.*` used for the DB Name */
@@ -462,6 +466,7 @@ export class Hub implements HubInterface {
       options.rpcAuth,
       options.rpcRateLimit,
       options.rpcSubscribePerIpLimit,
+      options.proxyTrustIpRange,
     );
     this.httpApiServer = new HttpAPIServer(this.rpcServer.getImpl(), this.engine, this.options.httpCorsOrigin);
     this.adminServer = new AdminServer(this, this.rocksDB, this.engine, this.syncEngine, options.rpcAuth);
@@ -543,7 +548,7 @@ export class Hub implements HubInterface {
           }
 
           // Delete the tar file, ignore errors
-          fs.unlink(tarResult.value, () => {});
+          fs.unlink(tarResult.value, () => { });
 
           // Cleanup old files from S3
           this.deleteOldSnapshotsFromS3();
@@ -1100,15 +1105,15 @@ export class Hub implements HubInterface {
     let message: ContactInfoContentBody = content.body
       ? content.body
       : ContactInfoContentBody.create({
-          gossipAddress: content.gossipAddress,
-          rpcAddress: content.rpcAddress,
-          excludedHashes: content.excludedHashes,
-          count: content.count,
-          hubVersion: content.hubVersion,
-          network: content.network,
-          appVersion: content.appVersion,
-          timestamp: content.timestamp,
-        });
+        gossipAddress: content.gossipAddress,
+        rpcAddress: content.rpcAddress,
+        excludedHashes: content.excludedHashes,
+        count: content.count,
+        hubVersion: content.hubVersion,
+        network: content.network,
+        appVersion: content.appVersion,
+        timestamp: content.timestamp,
+      });
     if (content.signature && content.signer && peerId.publicKey && content.body) {
       let bytes: Uint8Array;
       if (content.dataBytes) {
@@ -1463,9 +1468,7 @@ export class Hub implements HubInterface {
     mergeResult.match(
       (eventId) => {
         logEvent.info(
-          `submitOnChainEvent success ${eventId}: event ${onChainEventTypeToJSON(event.type)} in block ${
-            event.blockNumber
-          }`,
+          `submitOnChainEvent success ${eventId}: event ${onChainEventTypeToJSON(event.type)} in block`,
         );
       },
       (e) => {

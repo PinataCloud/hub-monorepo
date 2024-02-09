@@ -539,6 +539,7 @@ app
       s3SnapshotBucket: cliOptions.s3SnapshotBucket ?? hubConfig.s3SnapshotBucket,
       hubOperatorFid: parseInt(cliOptions.hubOperatorFid ?? hubConfig.hubOperatorFid),
       connectToDbPeers: hubConfig.connectToDbPeers ?? true,
+      proxyTrustIpRange: process.env['PROXY_TRUST_IP_RANGE']?.split(',')
     };
 
     // Startup check for Hub Operator FID

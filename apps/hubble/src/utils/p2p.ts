@@ -1,6 +1,6 @@
-import { GossipAddressInfo, HubAsyncResult, HubError, HubResult } from "@farcaster/hub-nodejs";
+import { GossipAddressInfo, HubAsyncResult, HubError, HubResult, ServerUnaryCall } from "@farcaster/hub-nodejs";
 import { Multiaddr, NodeAddress, multiaddr } from "@multiformats/multiaddr";
-import { AddressInfo, isIP } from "net";
+import { AddressInfo, isIP, BlockList } from "net";
 import { Result, err, ok } from "neverthrow";
 import { logger } from "./logger.js";
 import axios from "axios";
@@ -193,4 +193,15 @@ const checkCombinedAddr = (combinedAddr: string): HubResult<void> => {
     if (options.transport !== "tcp") return err(new HubError("bad_request", "multiaddr transport must be tcp"));
     return ok(undefined);
   });
+};
+
+export const getPeerVisitorIp = (call: ServerUnaryCall<unknown, unknown>, proxyTrustRange?: BlockList): string => {
+  if (proxyTrustRange) {
+    const peerIpAddress = extractIPAddress(call.getPeer());
+    const visitorIp = `${call.metadata?.get("x-forwarded-for")}`.split(",")[0];
+    if (peerIpAddress && visitorIp && proxyTrustRange.check(peerIpAddress)) {
+      return visitorIp;
+    }
+  }
+  return call.getPeer();
 };

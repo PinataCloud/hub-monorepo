@@ -7,6 +7,7 @@ export type {
   ClientUnaryCall,
   sendUnaryData,
   ServiceError,
+  ServerUnaryCall,
   ServerWritableStream,
 } from "@grpc/grpc-js";
 
